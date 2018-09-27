@@ -70,24 +70,37 @@ function toBeanText(bean) {
     var fieldText = "";
     var setterText = "";
     var typeSet = {};
-    var shoudImportJackson = false;
-    var tpl = document.getElementById('getset-templ').innerHTML;
+//    var shoudImportJackson = false; by leo
+    var shouldImportFastjson = false;
+    
+    //不需要setter 和 getter方法
+//    var tpl = document.getElementById('getset-templ').innerHTML;
 
     //依次遍历每个属性
     for (key in beanFields) {
 
-        //如果存在下划线小写格式的属性名，要改成驼峰命名
-        var camelKey = camelCase(key);
-        if (camelKey != key) {
-            //标准要用Jackson工具包做转换
-            fieldText += '   @JsonProperty("' + key + '")\n';
-            shoudImportJackson = true;
-        }
-
-        //生成属性定义
-        fieldText += "   private " + beanFields[key] + " " + camelKey + ";\n";
-        //记录属性类型,beanFields[key]可能有一些值，是List<Date>之类，要替换成Date
+    	//by leo 不采用驼峰命名方式
+//        //如果存在下划线小写格式的属性名，要改成驼峰命名
+//        var camelKey = camelCase(key);
+//        if (camelKey != key) {
+//            //标准要用Jackson工具包做转换
+//            fieldText += '   @JsonProperty("' + key + '")\n';
+//            shoudImportJackson = true;
+//        }
+    	
+        //by leo 判断字段类型，如果是Date类型需要加上@JSONField(format = "yyyy-MM-dd HH:mm")注解
         var type = beanFields[key];
+        if(type === "Date"){
+        	fieldText += '   @JSONField(format = "yyyy-MM-dd HH:mm")\n';
+        	shouldImportFastjson = true;
+        }
+        
+        //生成属性定义
+        //fieldText += "   private " + beanFields[key] + " " + camelKey + ";\n";
+        fieldText += "   private " + beanFields[key] + " " + key + ";\n";
+        //记录属性类型,beanFields[key]可能有一些值，是List<Date>之类，要替换成Date
+        //var type = beanFields[key];
+        
         if(type.indexOf("List<") > -1){
             type = beanFields[key].replace('List<',"");
             type = type.replace('>',"");
@@ -95,15 +108,19 @@ function toBeanText(bean) {
         }
         typeSet[type] = 'true';
 
+        /**
         //生成setter，getter语句
         var tplMap = {
-            a: camelKey,
-            A: firstToUpperCase(camelKey),
+//            a: camelKey,
+        	a: key,
+//            A: firstToUpperCase(camelKey),
+        	A: firstToUpperCase(key),
             T: beanFields[key]
         };
         setterText += tpl.replace(/a|A|T/g, function(matched) {
             return tplMap[matched];
         });
+        **/
 
     }
 
@@ -113,16 +130,40 @@ function toBeanText(bean) {
             importText += "import " + importMap[t] + ";\n";
         }
     }
-    if (shoudImportJackson) {
-        importText += "import org.codehaus.jackson.annotate.JsonIgnoreProperties;\nimport org.codehaus.jackson.annotate.JsonProperty;"
-    }
+    
+    //by leo 不再引入jackson类库
+//    if (shoudImportJackson) {
+//        importText += "import org.codehaus.jackson.annotate.JsonIgnoreProperties;\nimport org.codehaus.jackson.annotate.JsonProperty;"
+//    }
+    
+	if (shouldImportFastjson) {
+	  importText += "import com.alibaba.fastjson.annotation.JSONField;\n"
+	}
+	//by leo 引入lombok相关注解
+	importText += "import lombok.AllArgsConstructor;\n";
+	importText += "import lombok.Builder;\n";
+	importText += "import lombok.Data;\n";
+	importText += "import lombok.NoArgsConstructor;\n";
+
     var packageName = document.getElementById('package-input').value;
     if(packageName){
         importText = "package "+ packageName + ";\n" + importText;
     }
+   
+    //给类定义加上lombok注解
+    importText +="\n\n";
+    importText +="/**\n";
+    importText +=" * @author leonard\n";
+    importText +=" * @create "+(new Date()).Format("yyyy-MM-dd HH:mm")+"\n";
+    importText +=" **/\n";
+    
+    importText += "@Data\n";
+    importText += "@AllArgsConstructor\n";
+    importText += "@NoArgsConstructor\n";
+    importText += "@Builder\n";
 
     //把import,属性定义，setter，getter拼到一起，就是一个完整的java bean了
-    return importText + "\n\n   \npublic class "+className+" {\n\n" + fieldText + setterText + "\n}";
+    return importText + "public class "+className+" {\n\n" + fieldText + setterText + "\n}";
 }
 
 /**
@@ -184,12 +225,15 @@ function getTypeFromJsonVal(val,key,attrClassAry) {
     var typeofStr = typeof(val);
     if (typeofStr === 'number') {
         if (isInt(val)) {
-            return "int";
+        	//return "int";
+            return "Integer";
         } else {
-            return "double";
+        	//return "double";
+            return "Double";
         }
     } else if (typeofStr === 'boolean') {
-        return typeofStr;
+    	return "Boolean";
+        //return typeofStr;
     } else if (isDate(val)) {
         return "Date";
     } else if(!val){
